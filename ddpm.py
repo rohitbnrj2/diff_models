@@ -100,7 +100,7 @@ def train(args):
     for epoch in range(args.epoch):
         logging.info(f"Starting epoch {epoch}")
         pbar = tqdm(dataloader)
-        for i, (images, _) in enumerate(pbar):
+        for i, (images) in enumerate(pbar):
             images = images.to(device)
             t = diffusion.sample_timestep(images.shape[0]).to(device)
             x_t, noise = diffusion.noise_images(images, t)
@@ -122,8 +122,8 @@ def launch():
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
     args.run_name = "DDPM_Unconditional"
-    args.epoch = 500
-    args.batch_size = 32
+    args.epoch = 5
+    args.batch_size = 4
     args.image_size = 64
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
     args.lr = 1e-4
