@@ -31,10 +31,10 @@ class DoubleConv(nn.Module):
         if not mid_channels:
             mid_channels = out_channels
         self.double_conv = nn.Sequential(
-                           nn.Conv2d(in_channels, mid_channels, 3, 1, bias=False),
+                           nn.Conv2d(in_channels, mid_channels, 3, padding=1, bias=False),
                            nn.GroupNorm(1, mid_channels),
                            nn.GELU(),
-                           nn.Conv2d(mid_channels, out_channels, 3, 1, bias=False),
+                           nn.Conv2d(mid_channels, out_channels, 3, padding=1, bias=False),
                            nn.GroupNorm(1, out_channels),
         )
 
@@ -103,8 +103,8 @@ class UNet(nn.Module):
         self.sa1 = SelfAttention(128, 32)
         self.down2 = Down(128, 256)
         self.sa2 = SelfAttention(256, 16)
-        self.down3 = Down(256, 512)
-        self.sa3 = SelfAttention(512, 8)
+        self.down3 = Down(256, 256)
+        self.sa3 = SelfAttention(256, 8)
 
         self.bot1 = DoubleConv(256, 512)
         self.bot2 = DoubleConv(512, 512)
@@ -116,7 +116,7 @@ class UNet(nn.Module):
         self.sa5 = SelfAttention(64, 32)
         self.up3 = Up(128, 64)
         self.sa6 = SelfAttention(64, 64)
-        self.out_channels = nn.Conv2d(64, out_channel, 1)
+        self.out_channels = nn.Conv2d(64, out_channel, kernel_size=1)
 
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
@@ -130,10 +130,11 @@ class UNet(nn.Module):
         return pos_enc
     
     def forward(self, x, t):
-        t = t.unsqueeze(-1).type(torch.float64)
+        t = t.unsqueeze(-1).type(torch.float32)
         t = self.pos_encoding(t, self.time_dim)
 
         x1 = self.inp_chs(x)
+        assert x1.dtype == t.dtype
         x2 = self.down1(x1, t)
         x2 = self.sa1(x2)
         x3 = self.down2(x2, t)
@@ -148,7 +149,7 @@ class UNet(nn.Module):
         x = self.up1(x4, x3, t)
         x = self.sa4(x)
         x = self.up2(x, x2, t)
-        x = self.sa3(x)
+        x = self.sa5(x)
         x = self.up3(x, x1, t)
         x = self.sa6(x)
 

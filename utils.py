@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from PIL import Image
 
-matplotlib.use('Qt5Agg') 
+matplotlib.use('Agg') 
 
 plt.rcParams["figure.figsize"] = (8.0, 8.0)
 plt.rcParams["font.size"] = 8

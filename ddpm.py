@@ -11,7 +11,7 @@ from utils import *
 from unet import UNet
 from torch.utils.tensorboard import SummaryWriter
 
-matplotlib.use('Qt5Agg') 
+matplotlib.use('Agg')
 
 
 class Diffusion:
@@ -93,7 +93,7 @@ def train(args):
     model = UNet().to(device)
     optimizer = optim.AdamW(model.parameters(), lr = args.lr)
     mse = nn.MSELoss()
-    diffusion = Diffusion(img_size=args.img_size, device=device)
+    diffusion = Diffusion(img_size=args.image_size, device=device)
     logger = SummaryWriter(os.path.join("runs", args.run_name))
     l = len(dataloader)
     
@@ -125,7 +125,7 @@ def launch():
     args.epoch = 500
     args.batch_size = 32
     args.image_size = 64
-    args.device = "cuda"
+    args.device = "cuda" if torch.cuda.is_available() else "cpu"
     args.lr = 1e-4
 
     train(args)
