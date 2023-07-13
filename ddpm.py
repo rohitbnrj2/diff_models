@@ -119,7 +119,7 @@ def train(args):
             logger.add_scalar("MSE", loss.item(), global_step= epoch * l + i)
 
             if epoch % 5 == 0 and i == 0:
-                plot_noise_distribution(args, noise[0].detach(), predicted_noise[0].detach(), epoch)
+                plot_noise_distribution(args, noise[0].detach(), predicted_noise[0].detach(), epoch, t)
         
         if epoch % 5 == 0:
             sampled_images = diffusion.sample(model)
@@ -132,13 +132,14 @@ def launch():
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
     args.run_name = "DDPM_Unconditional"
-    args.epoch = 50
+    args.epoch = 100
     args.batch_size = 32
     args.image_size = 64
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
     args.lr = 1e-4
     args.num_workers = multiprocessing.cpu_count()
 
+    print(f"The model is being run on: {args.device}")
     train(args)
 
 if __name__ == "__main__":

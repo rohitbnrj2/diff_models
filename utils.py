@@ -23,9 +23,10 @@ def save_images(images, path, **kwargs):
 
     return
 
-def plot_noise_distribution(args, noise, predicted_noise, epoch: int = 0):
+def plot_noise_distribution(args, noise, predicted_noise, epoch: int = 0, t: torch.tensor = None):
     plt.hist(noise.cpu().numpy().flatten(), density = True, alpha = 0.8, label = "ground truth noise")
     plt.hist(predicted_noise.cpu().numpy().flatten(), density = True, alpha = 0.8, label = "predicted noise")
+    plt.title(f"The Histogram is for Timestep {t}")
     plt.legend()
     plt.savefig(f"noise_dist/{args.run_name}/{epoch}.png")
     plt.close()
@@ -57,4 +58,5 @@ def setup_logging(run_name):
     os.makedirs(os.path.join("models", run_name), exist_ok=True)
     os.makedirs(os.path.join("results", run_name), exist_ok=True)
     os.makedirs(os.path.join("noise_dist", run_name), exist_ok=True)
+    
     return
