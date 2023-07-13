@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 import os
 import logging
 import argparse
@@ -9,14 +10,13 @@ from tqdm import tqdm
 from torch import optim
 from utils import *
 from unet import UNet
-from torch.utils.tensorboard import SummaryWriter
 
 matplotlib.use('Agg')
 
 
 class Diffusion:
 
-    def __init__(self, timesteps: int = 1000, beta_start: float = 2e-4, beta_end: float = 2e-2, 
+    def __init__(self, timesteps: int = 100, beta_start: float = 2e-4, beta_end: float = 2e-2, 
                  img_size: int = 64, device: str = "cpu"):
         self.timesteps = timesteps
         self.beta_start = beta_start
@@ -91,6 +91,8 @@ def train(args):
     device = args.device
     dataloader = get_data(args)
     model = UNet().to(device)
+    print("Num params: ", sum(p.numel() for p in model.parameters()))
+
     optimizer = optim.AdamW(model.parameters(), lr = args.lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
@@ -99,8 +101,10 @@ def train(args):
     
     for epoch in range(args.epoch):
         logging.info(f"Starting epoch {epoch}")
+        print(f"Starting epoch {epoch}")
         pbar = tqdm(dataloader)
         for i, (images) in enumerate(pbar):
+
             images = images.to(device)
             t = diffusion.sample_timestep(images.shape[0]).to(device)
             x_t, noise = diffusion.noise_images(images, t)
@@ -113,20 +117,27 @@ def train(args):
 
             pbar.set_postfix(MSE = loss.item())
             logger.add_scalar("MSE", loss.item(), global_step= epoch * l + i)
+
+            if epoch % 5 == 0 and i == 0:
+                plot_noise_distribution(args, noise[0].detach(), predicted_noise[0].detach(), epoch)
         
-        sampled_images = diffusion.sample(model, n = images.shape[0])
-        save_images(sampled_images, os.path.join("results", args.run_name, f"{epoch}.jpg"))
-        torch.save(model.state_dict(), os.path.join("models", args.run_name, f"ckpt.pt"))
+        if epoch % 5 == 0:
+            sampled_images = diffusion.sample(model)
+            save_images(sampled_images, os.path.join("results", args.run_name, f"{epoch}.jpg"))
+            torch.save(model.state_dict(), os.path.join("models", args.run_name, f"ckpt.pt"))
+        else:
+            continue
 
 def launch():
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
     args.run_name = "DDPM_Unconditional"
-    args.epoch = 5
-    args.batch_size = 4
+    args.epoch = 50
+    args.batch_size = 32
     args.image_size = 64
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
     args.lr = 1e-4
+    args.num_workers = multiprocessing.cpu_count()
 
     train(args)
 
