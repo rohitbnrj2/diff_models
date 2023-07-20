@@ -1,22 +1,22 @@
-from torch.utils.tensorboard import SummaryWriter
 import os
 import logging
 import argparse
 import multiprocessing
 import torch
 import torch.nn as nn
-import matplotlib
+# import matplotlib
+# import matplotlib.pyplot as plt
+# from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from torch import optim
 from utils import *
 from unet import UNet
 
-matplotlib.use('Agg')
-
+# matplotlib.use('Agg')
 
 class Diffusion:
 
-    def __init__(self, timesteps: int = 100, beta_start: float = 2e-4, beta_end: float = 2e-2, 
+    def __init__(self, timesteps: int = 1000, beta_start: float = 2e-4, beta_end: float = 2e-2, 
                  img_size: int = 64, device: str = "cpu"):
         self.timesteps = timesteps
         self.beta_start = beta_start
@@ -52,8 +52,10 @@ class Diffusion:
         return
     
     def noise_images(self, x, t):
+        t = t.to("cpu")
         sqrt_alphas_bar = torch.sqrt(self.alpha_bar[t])[:, None, None, None]
         sqrt_one_minus_alphas_bar = torch.sqrt(1-self.alpha_bar[t])[:, None, None, None]
+        sqrt_alphas_bar, sqrt_one_minus_alphas_bar = sqrt_alphas_bar.to(self.device), sqrt_one_minus_alphas_bar.to(self.device)
         eps = torch.randn_like(x)
         noised_img = sqrt_alphas_bar * x + sqrt_one_minus_alphas_bar * eps
         return noised_img, eps
@@ -66,18 +68,21 @@ class Diffusion:
         logging.info(f"Sampling {n} new images")
         model.eval()
         with torch.no_grad():
-            x = torch.randn((n, 3, self.img_size, self.img_size))
+            x = torch.randn((n, 3, self.img_size, self.img_size), device=self.device)
             for i in range(self.timesteps)[::-1]:
                 t = (torch.ones(n) * i).long().to(self.device)
                 predicted_noise = model(x, t)
+                t = t.to("cpu")
                 alphas = self.alphas[t][:, None, None, None]
                 alphas_bar = self.alpha_bar[t][:, None, None, None]
                 betas = self.betas[t][:, None, None, None]
+                alphas, alphas_bar, betas = alphas.to(self.device), alphas_bar.to(self.device), betas.to(self.device)
+
                 if i > 1:
-                    noise = torch.randn_like(x)
+                    noise = torch.randn_like(x, device=self.device)
                 else:
-                    noise = torch.zeros_like(x)
-                
+                    noise = torch.zeros_like(x, device=self.device)
+                                
                 x = 1/torch.sqrt(alphas) * (x - ((1-alphas)/(torch.sqrt(1-alphas_bar))) * predicted_noise) + torch.sqrt(betas) * noise
         
         model.train()
@@ -88,20 +93,27 @@ class Diffusion:
     
 def train(args):
     setup_logging(args.run_name)
+    # logger = SummaryWriter(os.path.join("runs", args.run_name))
     device = args.device
     dataloader = get_data(args)
-    model = UNet().to(device)
+    if torch.cuda.device_count() > 1:
+        print("Using Parallel GPUs")
+        model = UNet(device=device).to(device)
+        model = nn.DataParallel(model)
+    else:
+        model = UNet(device=device).to(device)
     print("Num params: ", sum(p.numel() for p in model.parameters()))
 
     optimizer = optim.AdamW(model.parameters(), lr = args.lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
-    logger = SummaryWriter(os.path.join("runs", args.run_name))
     l = len(dataloader)
     
     for epoch in range(args.epoch):
         logging.info(f"Starting epoch {epoch}")
         print(f"Starting epoch {epoch}")
+
+        batch_loss = 0
         pbar = tqdm(dataloader)
         for i, (images) in enumerate(pbar):
 
@@ -115,13 +127,15 @@ def train(args):
             loss.backward()
             optimizer.step()
 
-            pbar.set_postfix(MSE = loss.item())
-            logger.add_scalar("MSE", loss.item(), global_step= epoch * l + i)
+            batch_loss += loss.item()
 
-            if epoch % 5 == 0 and i == 0:
+            pbar.set_postfix(MSE = batch_loss/(i+1))
+            # logger.add_scalar("MSE", loss.item(), global_step= epoch * l + i)
+
+            if epoch % 10 == 0 and i == 0:
                 plot_noise_distribution(args, noise[0].detach(), predicted_noise[0].detach(), epoch, t)
         
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             sampled_images = diffusion.sample(model)
             save_images(sampled_images, os.path.join("results", args.run_name, f"{epoch}.jpg"))
             torch.save(model.state_dict(), os.path.join("models", args.run_name, f"ckpt.pt"))
@@ -132,14 +146,16 @@ def launch():
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
     args.run_name = "DDPM_Unconditional"
-    args.epoch = 100
+    args.epoch = 500
     args.batch_size = 32
     args.image_size = 64
-    args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.lr = 1e-4
     args.num_workers = multiprocessing.cpu_count()
 
+    print(f"GPU visibility {torch.cuda.device_count()}")
     print(f"The model is being run on: {args.device}")
+
     train(args)
 
 if __name__ == "__main__":
