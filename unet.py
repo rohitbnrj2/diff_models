@@ -55,10 +55,7 @@ class Down(nn.Module):
 
         self.emb_layer = nn.Sequential(
             nn.SiLU(),
-            nn.Linear(
-                emb_dim,
-                out_channels
-            ),
+            nn.Linear(emb_dim,out_channels),
         )
 
     def forward(self, x, t):
@@ -79,10 +76,7 @@ class Up(nn.Module):
 
         self.emb_layer = nn.Sequential(
             nn.SiLU(),
-            nn.Linear(
-                emb_dim,
-                out_channels
-            ),
+            nn.Linear(emb_dim,out_channels),
         )
 
     def forward(self, x, skip_x, t):
@@ -106,9 +100,9 @@ class UNet(nn.Module):
         self.down3 = Down(256, 256)
         self.sa3 = SelfAttention(256, 8)
 
-        self.bot1 = DoubleConv(256, 512)
-        self.bot2 = DoubleConv(512, 512)
-        self.bot3 = DoubleConv(512, 256)
+        self.bot1 = DoubleConv(256, 1024)
+        self.bot2 = DoubleConv(1024, 1024)
+        self.bot3 = DoubleConv(1024, 256)
 
         self.up1 = Up(512, 128)
         self.sa4 = SelfAttention(128, 16)
@@ -119,10 +113,7 @@ class UNet(nn.Module):
         self.out_channels = nn.Conv2d(64, out_channel, kernel_size=1)
 
     def pos_encoding(self, t, channels):
-        inv_freq = 1.0 / (
-            10000
-            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
-        )
+        inv_freq = 1.0 / (10000** (torch.arange(0, channels, 2, device=self.device).float() / channels))
         inv_freq = inv_freq.to(self.device)
 
         pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
@@ -147,7 +138,7 @@ class UNet(nn.Module):
         x4 = self.bot1(x4)
         x4 = self.bot2(x4)
         x4 = self.bot3(x4)
-
+        
         x = self.up1(x4, x3, t)
         x = self.sa4(x)
         x = self.up2(x, x2, t)
@@ -158,7 +149,3 @@ class UNet(nn.Module):
         output = self.out_channels(x)
 
         return output
-
-
-
-
